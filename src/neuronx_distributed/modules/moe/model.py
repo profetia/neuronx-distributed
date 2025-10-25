@@ -235,7 +235,7 @@ class MoE(torch.nn.Module):
             # setup, but whether EP is enabled should be the same
             if self.ep_enabled:
                 output = mappings.reduce_scatter_to_sequence_parallel_region(
-                    output, self.sequence_dimension, process_group=parallel_state.get_world_group()
+                    output, self.sequence_dimension, process_group=self.tensor_parallel_group
                 )
             else:
                 # Delayed reduce-scatter back to sequence parallel (as the hidden_states were in SP)
@@ -245,7 +245,7 @@ class MoE(torch.nn.Module):
         else:
             if self.ep_enabled:
                 output = mappings.reduce_from_tensor_model_parallel_region(
-                    output, process_group=parallel_state.get_world_group()
+                    output, process_group=self.tensor_parallel_group
                 )
             else:
                 # Delayed All-Reduce
