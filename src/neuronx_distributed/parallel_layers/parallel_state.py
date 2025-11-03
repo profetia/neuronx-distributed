@@ -583,7 +583,8 @@ def initialize_model_parallel(
         tensor_model_parallel_size * pipeline_model_parallel_size * expert_model_parallel_size
     )
 
-    if tensor_model_parallel_size == 4 and _HARDWARE_TYPE == hardware.TRN1: # TODO, update with CP
+    if False:
+    # if tensor_model_parallel_size == 4 and _HARDWARE_TYPE == hardware.TRN1: # TODO, update with CP
         # On trn1, TP=4 is a special case where each TP group consists of locally connected,
         # non-contiguous ranks grouped within each node to avoid cross-node TP.
         # Ex: for TP=4 PP=1 on 2 trn1.32xl nodes (64 NeuronCores):

@@ -307,6 +307,7 @@ def initialize_optimizer_from_class(nxd_config, optimizer_class, parameters, mod
             raise RuntimeError(
                 "Non Zero-1 optimizer does not support `use_fp32_grad_acc` of `use_master_weights_in_ckpt`."
             )
+        defaults.pop('decoupled_weight_decay', None)
         optimizer = optimizer_class(parameters, **defaults)
         if get_delay_tracing(nxd_config):
             from neuronx_distributed.trainer import hooks
