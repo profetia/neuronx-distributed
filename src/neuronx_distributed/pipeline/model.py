@@ -346,6 +346,7 @@ class NxDPPModel(nn.Module):
             model_layers = self.get_model_layers(self.original_torch_module, self.transformer_layer_cls)
             if len(model_layers) == 0:
                 raise ValueError(f"No modules of type {self.transformer_layer_cls} found in the model.")
+            logger.info(f"Original model: \n{self.original_torch_module}")
             logger.info("Model transformer layers are: \n%s", model_layers)
             num_partitions = self.pipeline_parallel_size * self.virtual_pipeline_size
             pipeline_cuts = create_partitions(num_partitions, model_layers)
