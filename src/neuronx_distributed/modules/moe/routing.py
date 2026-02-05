@@ -21,6 +21,8 @@ class RouterBase(torch.nn.Module, ABC):
         device: Device for the layer weights.
         jitter_eps: Random noise factor for input perturbation.
         store_transposed_weights: Whether to register transposed router weights in the buffer.
+        use_float32_precision: If True, use float32 instead of float64 for activation computation.
+                               This matches the NKI kernel precision and can be used for performance experiments.
     """
 
     def __init__(
@@ -38,6 +40,7 @@ class RouterBase(torch.nn.Module, ABC):
         jitter_eps: float = 0.0,
         store_transposed_weights: bool = False,
         apply_act_fn_over_topk: bool = False,
+        use_float32_precision: bool = False,
     ):
         super().__init__()
         self.num_experts = num_experts
@@ -61,6 +64,9 @@ class RouterBase(torch.nn.Module, ABC):
         self.jitter_eps = jitter_eps
         self.store_transposed_weights = store_transposed_weights
         self.apply_act_fn_over_topk = apply_act_fn_over_topk
+        # Precision setting for activation computation (default: float64, kernel parity: float32)
+        self.use_float32_precision = use_float32_precision
+        self.compute_dtype = torch.float32 if use_float32_precision else torch.float64
 
         # TODO: Refactor with expert MLPv2 design to include parallel groups as mandatory arg
         if get_expert_model_parallel_size() > 1:
@@ -114,12 +120,13 @@ class RouterBase(torch.nn.Module, ABC):
         return router_logits
 
     def apply_activation_fn(self, weights):
-        # Perform activation in fp64 to prevent auto-downcasting of operation to bf16, for numerical accuracy
+        # Perform activation in high precision to prevent auto-downcasting of operation to bf16
+        # Default: float64 for numerical accuracy, float32 for kernel parity experiments
         # expert_affinities: (T, E)
         if self.act_fn == "sigmoid":
-            expert_affinities = torch.sigmoid(weights.to(dtype=torch.float64))
+            expert_affinities = torch.sigmoid(weights.to(dtype=self.compute_dtype))
         elif self.act_fn == "softmax":
-            expert_affinities = F.softmax(weights, dim=1, dtype=torch.float64)
+            expert_affinities = F.softmax(weights, dim=1, dtype=self.compute_dtype)
         else:
             raise ValueError("act_fn must be either 'sigmoid' or 'softmax'")
 
@@ -172,6 +179,7 @@ class RouterTopK(RouterBase):
         apply_act_fn_over_topk: bool = False,
         jitter_eps: float = 0.0,
         store_transposed_weights: bool = False,
+        use_float32_precision: bool = False,
     ):
         super().__init__(
             num_experts=num_experts,
@@ -187,14 +195,15 @@ class RouterTopK(RouterBase):
             jitter_eps=jitter_eps,
             store_transposed_weights=store_transposed_weights,
             apply_act_fn_over_topk=apply_act_fn_over_topk,
+            use_float32_precision=use_float32_precision,
         )
 
     def forward(self, hidden_states):
         # Get router_logits and expert_affinities
         router_logits = self.get_router_logits(hidden_states)
         if self.apply_act_fn_over_topk:
-            expert_affinities = torch.zeros_like(router_logits, dtype=torch.float64)
-            topk_weights, expert_index = torch.topk(router_logits.to(torch.float64), self.top_k, dim=1)
+            expert_affinities = torch.zeros_like(router_logits, dtype=self.compute_dtype)
+            topk_weights, expert_index = torch.topk(router_logits.to(self.compute_dtype), self.top_k, dim=1)
             topk_affinities = self.apply_activation_fn(topk_weights)
             expert_affinities = expert_affinities.scatter_(1, expert_index, topk_affinities)
         else:
