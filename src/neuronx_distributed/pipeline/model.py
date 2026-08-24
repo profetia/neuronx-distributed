@@ -1013,7 +1013,15 @@ class NxDPPModel(nn.Module):
         self.training = True
         for local_module in self.local_stage_modules:
             local_module.train()
-        self._exec_schedule(self.train_scheduler)
+
+        from torch_neuronx.experimental import profiler
+
+        with profiler.profile(
+            port=9012,
+            ms_duration=1000 * 60 * 5,
+            profile_type='operator',
+        ):
+            self._exec_schedule(self.train_scheduler)
         loss = self._process_loss()
         self.clear_minibatch_state()
         self.timeline.mark_step_end()
